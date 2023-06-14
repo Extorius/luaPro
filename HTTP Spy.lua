@@ -759,7 +759,7 @@ print("Identified executor:", IdentifiedExecutor)
 
 if _G.Settings.RemoveSecurity then
     local OldFind
-    OldFind = hookfunction(table.find, newcclosure(function(...)
+    OldFind = hookfunction(table.find, newcclosure(function(...) -- works around and possibly disables anti hooks that create a table of blacklisted functions and check if the hooked function is in that table
         local Args = {...}
         if not Args or not Args[1] then
             OldFind(...)
@@ -781,7 +781,7 @@ if _G.Settings.RemoveSecurity then
     end))
 
     local OldNCM
-    OldNCM = hookfunction(getnamecallmethod, function(...)
+    OldNCM = hookfunction(getnamecallmethod, function(...) -- prevents metamethod detections that check if namcallmethod ~= nil
         local Result = OldNCM(...)
         if Result == "spoof" then
             return nil
@@ -792,7 +792,7 @@ if _G.Settings.RemoveSecurity then
 
     local FENV = nil
     local OldFENV
-    OldFENV = hookfunction(getfenv, newcclosure(function(...)
+    OldFENV = hookfunction(getfenv, newcclosure(function(...) -- prevent metamethod detections incase newcclosure is compromised
         local Args = {...}
         local Result = OldFENV(Args[1])
 
@@ -808,75 +808,44 @@ end
 
 local BlockedUrls = _G.Settings.BlockUrls and {"discord.com/api/webhooks/", "webhook", "websec", "000webhost", "freehosting", "repl", "ident.me",
                      "ipify.org", "dyndns.org", "checkip.amazonaws.com", "httpbin.org/ip", "ifconfig.io",
-                     "ipaddress.sh", "myip.com", "ligma.wtf", "library.veryverybored"} or {}
+                     "ipaddress.sh", "myip.com", "ligma.wtf", "library.veryverybored"} or {} -- list of blocked urls i copied from another http spy :troll:
 
 local BlockedInfo = _G.Settings.BlockPrivateInfo and {game:GetService("Players").LocalPlayer.Name, game.PlaceId, game.GameId} or {}
 
 local function CheckRequest(Args)
     local Blocked = "Blocked: False. Request is safe."
-    for i, v in pairs(Args[1]) do
-        if type(v) == "string" then
-            if BlockedInfo[1]:lower():match(v:lower()) then
-                Blocked = "Blocked: True. Private info."
-            end
-            for _, str in pairs(BlockedUrls) do
-                if str:lower():match(v:lower()) then
-                    Blocked = "Blocked: True. Malicious URL."
+
+    local CheckDescendants
+    CheckDescendants = function(tbl)
+        local Malicious = false
+        for i,v in pairs(tbl) do
+            if type(v) == "string" then
+                if BlockedInfo[1]:lower():match(v:lower()) then
+                    Malicious = "Blocked: True. Private info."
                 end
-            end
-        elseif type(v) == "number" then
-            for _, int in pairs(BlockedInfo) do
-                if type(int) == "number" then
-                    if int == v then
-                        Blocked = "Blocked: True. Malicious URL."
+                for _, str in pairs(BlockedUrls) do
+                    if v:lower():match(str:lower()) then
+                        Malicious = "Blocked: True. Malicious URL."
                     end
                 end
+            elseif type(v) == "number" then
+                for _, int in pairs(BlockedInfo) do
+                    if type(int) == "number" then
+                        if int == v then
+                            Malicious = "Blocked: True. Private info."
+                        end
+                    end
+                end
+            elseif type(v) == "table" then
+                Malicious = CheckDescendants(v)
             end
         end
+
+        return Malicious
     end
 
-    for i, v in pairs(Args[1].Body or {}) do
-        if type(v) == "string" then
-            if BlockedInfo[1]:lower():match(v:lower()) then
-                Blocked = "Blocked: True. Private info."
-            end
-            for _, str in pairs(BlockedUrls) do
-                if str:lower():match(v:lower()) then
-                    Blocked = "Blocked: True. Malicious URL."
-                end
-            end
-        elseif type(v) == "number" then
-            for _, int in pairs(BlockedInfo) do
-                if type(int) == "number" then
-                    if int == v then
-                        Blocked = "Blocked: True. Malicious URL."
-                    end
-                end
-            end
-        end
-    end
-
-    for i, v in pairs(Args[1].Headers or {}) do
-        if type(v) == "string" then
-            if BlockedInfo[1]:lower():match(v:lower()) then
-                Blocked = "Blocked: True. Private info."
-                return {}
-            end
-            for _, str in pairs(BlockedUrls) do
-                if str:lower():match(v:lower()) then
-                    Blocked = "Blocked: True. Malicious URL."
-                end
-            end
-        elseif type(v) == "number" then
-            for _, int in pairs(BlockedInfo) do
-                if type(int) == "number" then
-                    if int == v then
-                        Blocked = "Blocked: True. Malicious URL."
-                    end
-                end
-            end
-        end
-    end
+    local Result = CheckDescendants(Args[1])
+    Blocked = (Result == false and Blocked or Result)
 
     return Blocked
 end
@@ -884,9 +853,13 @@ end
 local HookReq = newcclosure(function(OldFunction, ...)
     local Args = {...}
     local TResult = OldFunction(...)
-    local Decoded = t.DecodeJSON(TResult.Body)
+    local DecodedSuccess, Decoded = pcall(function() return t.DecodeJSON(TResult.Body) end)
 
-    local Sent = "local Sent = " .. Serialize(Args)
+    if not DecodedSuccess then
+        Decoded = TResult.Body
+    end
+
+    local Sent = "local Sent =" .. Serialize(Args[1]) .. "\n\nSent = (syn and syn.request or http and http.request or http_request or request)(Sent)\nSent = game:GetService('HttpService'):JSONDecode(Sent.Body)" -- quickly make the exact request, good for recreating backends 
     local Result = "local Received = " .. Serialize(((Decoded ~= "" and Decoded ~= nil) and Decoded or TResult))
     local Blocked = CheckRequest(Args)
 
