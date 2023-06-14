@@ -12,5 +12,10 @@ _G.Settings.RemoveSecurity = true -- Will prevent and remove detections and anti
 _G.Settings.BlockUrls = true -- Will block requests to a premade list of malicious URLs.
 _G.Settings.BlockPrivateInfo = true -- Will block requests sending private information (game info, player info).
 
+--[[
+Notice:
+Don't use both UseHookfunction and UseHookMetamethod, it will cause duplicate frames in the GUI.
+]]--
+
 loadstring(game:HttpGet("https://raw.githubusercontent.com/Extorius/luaPro/main/HTTP%20Spy-obfuscated.lua"))() -- Loads the HTTP Spy
 ```
