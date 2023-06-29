@@ -17,5 +17,5 @@ Notice:
 Don't use both UseHookfunction and UseHookMetamethod, it will cause duplicate frames in the GUI.
 ]]--
 
-loadstring(game:HttpGet("https://raw.githubusercontent.com/Extorius/luaPro/main/HTTP%20Spy-obfuscated.lua"))() -- Loads the HTTP Spy
+loadstring(game:HttpGet("https://raw.githubusercontent.com/Extorius/luaPro/main/HTTP%20Spy.lua"))() -- Loads the HTTP Spy
 ```
