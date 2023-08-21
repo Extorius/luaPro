@@ -1,12 +1,139 @@
-assert(_G, "Missing _G global")
-assert(_G.Settings, "Please provide valid settings.")
+assert(game, "This script is intended for a LuaU handicapped environment.")
+assert(game.PlaceId, "what")
 
-if _G.LPRM then
+assert(_G, "Missing _G global.")
+assert(_G.Settings, "Please provide valid settings.")
+assert(identifyexecutor, "Unsupported executor.")
+assert(clonefunction, "Unsupported executor (2)")
+
+local error, rawget, tostring, print, next, getmetatable, assert, setmetatable, pcall, type, tonumber, pairs, ipairs,
+    select, hookfunction, newcclosure, setnamecallmethod, getnamecallmethod, setreadonly = clonefunction(error),
+    clonefunction(rawget), clonefunction(tostring), clonefunction(print), clonefunction(next), clonefunction(
+        getmetatable), clonefunction(assert), clonefunction(setmetatable), clonefunction(pcall), clonefunction(type),
+    clonefunction(tonumber), clonefunction(pairs), clonefunction(ipairs), clonefunction(select), clonefunction(
+        hookfunction), clonefunction(newcclosure), clonefunction(setnamecallmethod), clonefunction(getnamecallmethod),
+    clonefunction(setreadonly)
+
+local l = 'abcdefghijklmnopqrstuvwxyz'
+local u = l:upper()
+local strings = 0
+
+local function createstring() -- i dont know what i was thinking when i wrote any of this
+    local function round(int)
+        if int > 0.5 then
+            return math.ceil(int)
+        else
+            return math.floor(int)
+        end
+    end
+    strings = strings + 1
+    local r = ''
+    local len = round(strings / 26)
+    local offset = round(26 * len)
+    if strings - offset == 0 then
+        offset = offset + 1
+    end
+    r = l:sub(strings - offset, strings - offset)
+    for i = 1, len do
+        if i % 2 == 0 then
+            r = r .. u:sub(strings - offset, strings - offset)
+        end
+    end
+    return r
+end
+
+local t = {}
+local previousindex = nil
+local function refresht()
+    previousindex = nil
+    for i = 1, 100 do
+        t[createstring()] = i
+    end
+end
+
+local function seedgen()
+    local currentindex, v = next(t, previousindex)
+    if currentindex ~= nil then
+        previousindex = currentindex
+        return v
+    else
+        refresht()
+        return seedgen()
+    end
+end
+
+local oldseedgen = seedgen
+
+local random = {} -- :troll:
+function random.int(...)
+    local minvalue, maxvalue = ...
+    if minvalue then
+        assert(type(minvalue) == 'number', 'malformed argument #1: number expected')
+        if not maxvalue then
+            return random.int(1, minvalue)
+        end
+    else
+        minvalue = 0.001
+    end
+    if maxvalue then
+        assert(type(maxvalue) == 'number', 'malformed argument #2: number expected')
+    else
+        maxvalue = 1
+    end
+    local seed = seedgen()
+    local a = 1103515245
+    local c = 12345
+    local m = 2147483648
+    local state = seed
+    local range = maxvalue - minvalue + 1
+    state = (a * state + c) % m
+    local r = (state % range) + minvalue
+    if r > maxvalue then
+        return random.int(minvalue, maxvalue)
+    else
+        return r
+    end
+end
+
+function random.string(...)
+    local len, availablechars = ...
+    assert(len, "missing argument #1: number expected")
+    assert(type(len) == "number", "malformed argument #1: number expected")
+    local chars = ""
+    local r = ''
+    if availablechars then
+        assert(type(availablechars) == 'string', "malformed argument #2: string expected")
+        chars = availablechars
+    else
+        chars = "abcdefghijklmnopqrstuvxwyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
+    end
+    for i = 1, len do
+        local n = random.int(#chars)
+        r = r .. chars:sub(n, n)
+    end
+    return r
+end
+
+function random.setseed(...)
+    local value = select(1, ...)
+    if value then
+        assert(type(value) == 'number', "malformed argument #1: number expected")
+        seedgen = function()
+            return value
+        end
+    else
+        seedgen = oldseedgen
+    end
+end
+
+random.setseed(tonumber(os.date("%j"))) -- random seed based on the current day of the year, meaning its not static but will most likely detect if you've already ran the script
+local GlobalString = random.string(10) -- random string for if luapro has already ran, so anti http spies cant just check for _G['LPRM']
+random.setseed() -- reverts the random library seed generator back
+
+if _G[GlobalString] then
     print("Already loaded luaPro HTTP Spy.")
     return
 end
-
-_G.LPRM = true
 
 -- Instances:
 local Converted = {
@@ -43,6 +170,7 @@ local Converted = {
 
 Converted["_ScreenGui"].ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 Converted["_ScreenGui"].Parent = game:GetService("CoreGui")
+Converted["_ScreenGui"].Name = random.int(math.exp(20), math.exp(22))
 
 Converted["_Frame"].AnchorPoint = Vector2.new(0.5, 0.5)
 Converted["_Frame"].BackgroundColor3 = Color3.fromRGB(34.00000177323818, 34.00000177323818, 34.00000177323818)
@@ -57,7 +185,7 @@ Converted["_UIStroke"].Thickness = 2
 Converted["_UIStroke"].Parent = Converted["_Frame"]
 
 Converted["_Name"].Font = Enum.Font.GothamBold
-Converted["_Name"].Text = "luaPro HTTP Spy"
+Converted["_Name"].Text = "luaPro HTTP Spy v1.1"
 Converted["_Name"].TextColor3 = Color3.fromRGB(221.00001722574234, 221.00001722574234, 221.00001722574234)
 Converted["_Name"].TextSize = 18
 Converted["_Name"].TextXAlignment = Enum.TextXAlignment.Left
@@ -662,50 +790,129 @@ t.EncodeJSON = function(jsonTable)
     return Encode(jsonTable)
 end
 
-local function Serialize(Data) -- slightly skidded serializer from a remote spy I found
-    local Result = "{"
+local function Serialize(data, var, indents)
+    var = var or "local Serialized = "
+    indents = indents or 1
 
-    local Success, Response = pcall(function()
-        for i, v in pairs(Data or {}) do
-            local Iterator = "[" .. (type(i) == "string" and "'" or "") .. tostring(i) ..
-                                 (type(i) == "string" and "'" or "") .. "]="
-            if type(v) == "number" then
-                Result = Result .. Iterator .. tostring(v)
-                if i ~= #Data then
-                    Result = Result .. ","
-                else
-                    Result = Result .. ""
-                end
-            elseif type(v) == "string" then
-                if (v:match("'") and not v:match('"')) or not (v:match("'") and not v:match('"')) then
-                    Result = Result .. Iterator .. '"' .. v .. '"'
-                elseif v:match('"') and not v:match("'") then
-                    Result = Result .. Iterator .. "'" .. v .. "'"
-                else
-                    Result = Result .. Iterator .. "[[" .. v .. "]]"
+    if type(data) ~= 'table' then
+        data = {
+            [1] = data
+        }
+    end
+
+    local function SerializeString(str)
+        local r = ''
+        local sq = str:match("'")
+        local dq = str:match('"')
+        local db = str:match("%[%[") or str:match("]]")
+
+        if (not sq and not dq) or (sq and not dq) then
+            r = r .. '"' .. str .. '"'
+        elseif (dq and not sq) then
+            r = r .. "'" .. str .. "'"
+        elseif dq and dq and not db then
+            r = r .. "[[" .. str .. "]]"
+        else
+            r = r .. '"' .. str:gsub('"', '\\"') .. '"'
+        end
+
+        return r
+    end
+
+    local r = var .. '{\n'
+    local iteration = 0
+
+    for i, v in pairs(data) do
+        iteration = iteration + 1
+        data = setmetatable(data, {
+            __len = function()
+                local len = 0
+                for i, v in pairs(data) do
+                    len = len + 1
                 end
 
-                if i ~= #Data then
-                    Result = Result .. ","
-                else
-                    Result = Result .. ""
-                end
-            elseif type(v) == "table" then
-                Result = Result .. Iterator .. Serialize(v)
-                if i ~= #Data then
-                    Result = Result .. ","
-                else
-                    Result = Result .. ""
-                end
+                return len
+            end
+        })
+
+        local valuetype = type(v)
+        local indextype = type(i)
+
+        local index = string.rep('\t', indents) .. "["
+        if indextype == 'string' then
+            index = index .. SerializeString(i)
+        elseif indextype == 'number' then
+            index = index .. tostring(i)
+        end
+
+        index = index .. '] = '
+        r = r .. index
+
+        if valuetype == 'string' then
+            r = r .. SerializeString(v)
+        elseif valuetype == 'number' then
+            r = r .. tostring(v)
+        elseif valuetype == 'table' then
+            r = r .. Serialize(v, '', indents + 1)
+        end
+
+        if iteration ~= #data then
+            r = r .. ',\n'
+        else
+            r = r .. '\n' .. string.rep('\t', indents - 1) .. '}'
+        end
+    end
+
+    return r
+end
+
+local Key53 = math.exp(random.int(40, 53)) -- randomized keys means anti http spies cant just hook setnamecallmethod and check if the parameter is "spoof" encoded
+local Key14 = math.exp(random.int(10, 14))
+
+local inv256
+
+local function encode(str) -- pretty sure i found this on stack over flow (i forgot)
+    if type(str) == 'string' then
+        if not inv256 then
+            inv256 = {}
+            for M = 0, 127 do
+                local inv = -1
+                repeat
+                    inv = inv + 2
+                until inv * (2 * M + 1) % 256 == 1
+                inv256[M] = inv
             end
         end
-    end)
-
-    if Success then
-        return Result .. "}"
-    else
-        return "Internal Error: [" .. Response .. "]"
+        local K, F = Key53, 16384 + Key14
+        return (str:gsub('.', function(m)
+            local L = K % 274877906944 -- 2^38
+            local H = (K - L) / 274877906944
+            local M = H % 128
+            m = m:byte()
+            local c = (m * inv256[M] - (H - M) / 128) % 256
+            K = L * F + H + c + m
+            return ('%02x'):format(c)
+        end))
     end
+
+    return str
+end
+
+local function decode(str)
+    if type(str) == 'string' then
+        local K, F = Key53, 16384 + Key14
+        return (str:gsub('%x%x', function(c)
+            local L = K % 274877906944 -- 2^38
+            local H = (K - L) / 274877906944
+            local M = H % 128
+            c = tonumber(c, 16)
+            local m = (c + (H - M) / 128) * (2 * M + 1) % 256
+            K = L * F + H + c + m
+            return string.char(m)
+        end))
+    end
+
+    return str
 end
 
 local RequestFunctions = {
@@ -714,6 +921,7 @@ local RequestFunctions = {
     ["unc2"] = http_request,
     ["unc3"] = request
 }
+
 local IdentifiedExecutor = nil
 
 if RequestFunctions["synapase"] and not RequestFunctions["unc1"] and not RequestFunctions["unc2"] and
@@ -733,95 +941,207 @@ end
 assert(IdentifiedExecutor, "Unsupported executor?: Missing / Mismatching Request Function(s)")
 print("Identified executor:", IdentifiedExecutor)
 
-if _G.Settings.RemoveSecurity then
-    local OldFind
-    OldFind = hookfunction(table.find, newcclosure(function(...) -- works around and possibly disables anti hooks that create a table of blacklisted functions and check if the hooked function is in that table
-        local Args = {...}
-        if not Args or not Args[1] then
-            OldFind(...)
-        end
+local Settings = _G.Settings
+if Settings.RemoveSecurity then
+    print("Attempting to remove / bypass anti HTTP spy securities")
 
-        if not Args[2] then
-            OldFind(...)
-        end
-
-        if OldFind(RequestFunctions, Args[2]) then
-            local S, R = pcall(function()
-                table.clear(Args[1])
+    local OldPcall = clonefunction(pcall)
+    local function Spoofpcalls()
+        for i = 1, random.int(10, 20) do
+            local options = {true, false, nil, "hi", {}, {
+                [1] = 'hi again'
+            }}
+            local co = options[random.int(1, #options)]
+            local s, r = pcall(function()
+                assert(co)
             end)
 
-            return false
+            if s then
+                if co == false or co == nil then
+                    pcall = OldPcall
+                end
+            else
+                if co ~= false or co ~= nil then
+                    pcall = OldPcall
+                end
+            end
         end
+    end
+
+    local OldMTs = {}
+    for i, v in pairs(RequestFunctions) do
+        OldMTs[i] = getmetatable(v)
+    end
+
+    for i, v in pairs({http and http or nil, syn and syn or nil}) do
+        OldMTs[i] = getmetatable(v)
+    end
+
+    local OldGMT
+    OldGMT = hookfunction(getmetatable, newcclosure(function(...)
+        Spoofpcalls()
+        if pcall(OldGMT, ...) then
+            local arg = ...
+            local OldMTIndex = OldMTs.find(arg)
+            if OldMTIndex then
+                return OldMTs[OldMTIndex]
+            end
+        end
+
+        Spoofpcalls()
+
+        return OldGMT(...)
+    end))
+
+    local OldFind
+    OldFind = hookfunction(table.find, newcclosure(function(...)
+        Spoofpcalls()
+        if pcall(OldFind, ...) then
+            local t, v = ...
+            if RequestFunctions.find(v) then
+                for i = 1, #t do
+                    t[i] = nil
+                end
+                return nil
+            end
+        end
+
+        Spoofpcalls()
 
         return OldFind(...)
     end))
 
     local OldNCM
-    OldNCM = hookfunction(getnamecallmethod, function(...) -- prevents metamethod detections that check if namcallmethod ~= nil
-        local Result = OldNCM(...)
-        if Result == "spoof" then
-            return nil
-        end
-
-        return Result
-    end)
-
-    local FENV = nil
-    local OldFENV
-    OldFENV = hookfunction(getfenv, newcclosure(function(...) -- prevent metamethod detections incase newcclosure is compromised
-        local Args = {...}
-        local Result = OldFENV(Args[1])
-
-        if not Args[1] then
-            FENV = Result
-        else
-            return FENV
-        end
-
-        return Result
-    end))
-end
-
-local BlockedUrls = _G.Settings.BlockUrls and {"discord.com/api/webhooks/", "webhook", "websec", "000webhost", "freehosting", "repl", "ident.me",
-                     "ipify.org", "dyndns.org", "checkip.amazonaws.com", "httpbin.org/ip", "ifconfig.io",
-                     "ipaddress.sh", "myip.com", "ligma.wtf", "library.veryverybored"} or {} -- list of blocked urls i copied from another http spy :troll:
-
-local BlockedInfo = _G.Settings.BlockPrivateInfo and {game:GetService("Players").LocalPlayer.Name, game.PlaceId, game.GameId} or {}
-
-local function CheckRequest(Args)
-    local Blocked = "Blocked: False. Request is safe."
-
-    local CheckDescendants
-    CheckDescendants = function(tbl)
-        local Malicious = false
-        for i,v in pairs(tbl) do
-            if type(v) == "string" then
-                if BlockedInfo[1]:lower():match(v:lower()) then
-                    Malicious = "Blocked: True. Private info."
-                end
-                for _, str in pairs(BlockedUrls) do
-                    if v:lower():match(str:lower()) then
-                        Malicious = "Blocked: True. Malicious URL."
-                    end
-                end
-            elseif type(v) == "number" then
-                for _, int in pairs(BlockedInfo) do
-                    if type(int) == "number" then
-                        if int == v then
-                            Malicious = "Blocked: True. Private info."
-                        end
-                    end
-                end
-            elseif type(v) == "table" then
-                Malicious = CheckDescendants(v)
+    OldNCM = hookfunction(getnamecallmethod, newcclosure(function(...)
+        Spoofpcalls()
+        if pcall(OldNCM, ...) then
+            local NCM = OldNCM(...)
+            if NCM == encode('spoof') then
+                return nil
             end
         end
 
-        return Malicious
+        Spoofpcalls()
+
+        return OldNCM(...)
+    end))
+
+    local env = nil
+    local OldGFENV
+    OldGFENV = hookfunction(getfenv, newcclosure(function(...)
+        Spoofpcalls()
+        if pcall(OldGFENV, ...) then
+            local Args = {...}
+            local Result = OldGFENV(Args[1])
+
+            if not Args[1] then
+                env = Result
+            else
+                return env
+            end
+
+            return Result
+        end
+
+        Spoofpcalls()
+
+        return OldGFENV(...)
+    end))
+
+    local OldSFENV
+    OldSFENV = hookfunction(setfenv, newcclosure(function(...)
+        Spoofpcalls()
+        if pcall(OldSFENV, ...) then
+            local f, e = ...
+            if RequestFunctions.find(f) then
+                return
+            end
+        end
+
+        Spoofpcalls()
+
+        return OldSFENV(...)
+    end))
+
+    local SpoofTheseFunctionsSoAntiHttpSpiesCantUseConstantScanningToDetectHooking = function(s)
+        return s == 'hookfunction' or s == 'setmetatable' or s == 'readonly' or s == 'rawget' or s == 'newcclosure'
     end
 
-    local Result = CheckDescendants(Args[1])
-    Blocked = (Result == false and Blocked or Result)
+    local OldDebug = debug
+    setreadonly(debug, false)
+
+    local NewMT = {
+        __index = function(self, index)
+            if index == 'getconstants' then
+                local oldgcs = rawget(OldDebug.getconstants)
+                return function(...)
+                    local f = select(1, ...)
+                    if type(f) == 'function' then
+                        local c = oldgcs(f)
+                        local r = c
+                        for i, v in next, c do
+                            if SpoofTheseFunctionsSoAntiHttpSpiesCantUseConstantScanningToDetectHooking(v) then
+                                table.remove(r, i)
+                            end
+                        end
+
+                        return r
+                    end
+
+                    return oldgcs(...)
+                end
+            end
+
+            return rawget(OldDebug, index)
+        end
+    }
+
+    getgenv().debug = setmetatable({}, NewMT)
+
+    local OldGC
+    OldGC = hookfunction(getgc, newcclosure(function(...)
+        Spoofpcalls()
+        if pcall(OldGC, ...) then
+            local r = OldGC()
+            local block = r
+            for i, v in next, r do
+                if type(v) == 'function' then
+                    local c = debug.getconstants(v) -- just in case fr
+                    for a, b in next, c do
+                        if SpoofTheseFunctionsSoAntiHttpSpiesCantUseConstantScanningToDetectHooking(b) then
+                            table.remove(block, i)
+                        end
+                    end
+                end
+            end
+        end
+
+        Spoofpcalls()
+        return OldGC(...)
+    end))
+end
+
+local BlockedUrls = Settings.BlockUrls and
+                        {"discord.com/api/webhooks/", "webhook", "websec", "000webhost", "freehosting", "repl",
+                         "ident.me", "ipify.org", "dyndns.org", "checkip.amazonaws.com", "httpbin.org/ip",
+                         "ifconfig.io", "ipaddress.sh", "myip.com", "ligma.wtf", "library.veryverybored"} or {} -- list of blocked urls i copied from another http spy :troll:
+local BlockedInfo = Settings.BlockPrivateInfo and {game:GetService("Players").LocalPlayer.Name, game.PlaceId, game.GameId, game:GetService("RbxAnalyticsService"):GetClientId(), game:HttpGet('https://api.ipify.org')} or {}
+
+local function CheckArgs(...)
+    local Serialized = Serialize(...)
+    local Blocked = "Blocked: False. Request is safe."
+
+    for i, v in pairs(BlockedUrls) do
+        if Serialized:lower():match(v:lower()) then
+            Blocked = "Blocked: True. Malicious URL."
+        end
+    end
+
+    for i, v in pairs(BlockedInfo) do
+        if Serialized:lower():match(tostring(v):lower()) then
+            Blocked = "Blocked: True. Private info."
+        end
+    end
 
     return Blocked
 end
@@ -829,15 +1149,18 @@ end
 local HookReq = newcclosure(function(OldFunction, ...)
     local Args = {...}
     local TResult = OldFunction(...)
-    local DecodedSuccess, Decoded = pcall(function() return t.DecodeJSON(TResult.Body) end)
+    local DecodedSuccess, Decoded = pcall(function()
+        return t.DecodeJSON(TResult.Body)
+    end)
 
     if not DecodedSuccess then
         Decoded = TResult.Body
     end
 
-    local Sent = "local Sent =" .. Serialize(Args[1]) .. "\n\nSent = (syn and syn.request or http and http.request or http_request or request)(Sent)\nSent = game:GetService('HttpService'):JSONDecode(Sent.Body)" -- quickly make the exact request, good for recreating backends 
-    local Result = "local Received = " .. Serialize(((Decoded ~= "" and Decoded ~= nil) and Decoded or TResult))
-    local Blocked = CheckRequest(Args)
+    local Sent = Serialize(Args[1], 'local Sent = ') ..
+                     "\nSent = (syn and syn.request or http and http.request or http_request or request)(Sent)\nSent = game:GetService('HttpService'):JSONDecode(Sent.Body)" -- quickly make the exact request, good for recreating backends 
+    local Result = Serialize(((Decoded ~= "" and Decoded ~= nil) and Decoded or TResult), 'local Received = ')
+    local Blocked = CheckArgs(Args)
 
     AddFrame(Args[1].Url, Sent, Result, Blocked)
 
@@ -848,79 +1171,105 @@ local HookReq = newcclosure(function(OldFunction, ...)
     return TResult
 end)
 
-if _G.Settings.UseHookfunction then
-    for _, Function in pairs(RequestFunctions) do
-        print("Attempting to hook " .. tostring(_) .. ".")
-
+if Settings.UseHookfunction then
+    for i, v in pairs(RequestFunctions) do
+        print("Attempting to hook request function " .. i)
         local Success, Response = pcall(function()
             local OldFunction
-            OldFunction = hookfunction(Function, newcclosure(function(...)
+            OldFunction = hookfunction(v, newcclosure(function(...)
                 return HookReq(OldFunction, ...)
             end))
         end)
 
         if Success then
             print("Hooked successfully")
-            if ExecutorName == "Valyse" then
-                break -- when tested with Valyse, each request function was called whenever you used any of the request functions, which lead to multiple frames in the GUI
+            if ExecutorName == 'Valyse' then -- valyse is retarded
+                break
             end
         else
-            print("Did not hook successfully. Trying next function.")
+            print("Error hooking:", Response)
         end
     end
 end
 
-if http and _G.Settings.UseHookMetamethod then
-    print("Attempting to hook http __index metamethod")
-    local Success, Response = pcall(function()
-        local OldHttp = http
-        getgenv().http = setmetatable({}, {
-            __index = newcclosure(function(self, key)
-                if key == "request" then
-                    return function(...)
-                        setnamecallmethod("spoof")
-                        return HookReq(RequestFunctions['unc1'], ...)
+if Settings.UseHookMetamethod then
+    if http then
+        print("Attempting to hook http __index metamethod")
+        local Success, Response = pcall(function()
+            local OldHttp = http
+            setreadonly(http, false)
+
+            local NewMT = {
+                __index = newcclosure(function(self, key)
+                    if key == "request" then
+                        return function(...)
+                            setnamecallmethod(encode("spoof"))
+                            return HookReq(RequestFunctions['unc1'], ...)
+                        end
                     end
+
+                    return rawget(OldHttp, key)
+                end)
+            }
+
+            if Settings.RemoveSecurity then
+                NewMT['__metamethod'] = function()
                 end
+            end
 
-                return rawget(OldHttp, key)
-            end)
-        })
-    end)
+            getgenv().http = setmetatable({}, NewMT)
+        end)
 
-    if Success then
-        print("Hooked successfully")
+        if Success then
+            print("Hooked successfully")
+        else
+            print("Error hooking:", Response)
+        end
+    elseif syn then
+        print("Attempting to hook syn __index metamethod")
+        local Success, Response = pcall(function()
+            local OldSyn = syn
+            setreadonly(syn, false)
+
+            local NewMT = {
+                __index = newcclosure(function(self, key)
+                    if key == "request" then
+                        return function(...)
+                            setnamecallmethod(encode("spoof"))
+                            return HookReq(RequestFunctions['synapse'], ...)
+                        end
+                    end
+
+                    return rawget(OldSyn, key)
+                end)
+            }
+
+            if Settings.RemoveSecurity then
+                NewMT['__metamethod'] = function()
+                end
+            end
+
+            getgenv().syn = setmetatable({}, NewMT)
+        end)
+
+        if Success then
+            print("Hooked successfully")
+        else
+            print("Error hooking:", Response)
+        end
+    else
+        error(
+            "Unsupported executor: This executor does not support the http or syn library. Please disable UseHookMetamethod, and enable UseHookfunction instead.")
     end
 end
 
-if syn and _G.Settings.UseHookMetamethod then
-    print("Attempting to hook syn __index metamethod")
-    local Success, Response = pcall(function()
-        local OldSyn = syn
-        getgenv().syn = setmetatable({}, {
-            __index = newcclosure(function(self, key)
-                if key == "request" then
-                    return function(...)
-                        setnamecallmethod("spoof")
-                        return HookReq(RequestFunctions['synapse'], ...)
-                    end
-                end
-
-                return rawget(OldSyn, key)
-            end)
-        })
-    end)
-
-    if Success then
-        print("Hooked successfully")
-    end
-end
-
-print("luaPro HTTP Spy has loaded in.")
+print("luaPro HTTP Spy v1.1 has loaded in.")
 print([[
 -- Credits --
    Product Of: luaPro
-   Made by: noxu#8161
+   Made by: noxu
 
-   URLs: https://luapro.xyz / https://discord.gg/9KYpKu2Nks
+   URLs: https://luapro.xyz / https://discord.gg/VrbNGY4cZD
 ]])
+
+_G[GlobalString] = true
