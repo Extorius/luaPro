@@ -1,3 +1,15 @@
+_G.Settings = {} -- Preparing the settings table.
+_G.Settings.UseHookfunction = true -- Will detect any request functions supported by the executor, and hook them.
+_G.Settings.UseHookMetamethod = false -- Will detect either the syn or http library, and hook it's __index metamethod to return a hooked request function.
+_G.Settings.RemoveSecurity = false -- Will prevent and remove detections and anti hook methods used by Anti HTTP Spies.
+_G.Settings.BlockUrls = false -- Will block requests to a premade list of malicious URLs.
+_G.Settings.BlockPrivateInfo = false -- Will block requests sending private information (game info, player info).
+
+--[[
+Notice:
+Don't use both UseHookfunction and UseHookMetamethod, it will cause duplicate frames in the GUI.
+]] --
+
 assert(game, "This script is intended for a LuaU handicapped environment.")
 assert(game.PlaceId, "what")
 
@@ -998,7 +1010,7 @@ if Settings.RemoveSecurity then
         Spoofpcalls()
         if pcall(OldFind, ...) then
             local t, v = ...
-            if RequestFunctions.find(v) then
+            if OldFind(RequestFunctions, v) then
                 for i = 1, #t do
                     t[i] = nil
                 end
@@ -1026,34 +1038,12 @@ if Settings.RemoveSecurity then
         return OldNCM(...)
     end))
 
-    local env = nil
-    local OldGFENV
-    OldGFENV = hookfunction(getfenv, newcclosure(function(...)
-        Spoofpcalls()
-        if pcall(OldGFENV, ...) then
-            local Args = {...}
-            local Result = OldGFENV(Args[1])
-
-            if not Args[1] then
-                env = Result
-            else
-                return env
-            end
-
-            return Result
-        end
-
-        Spoofpcalls()
-
-        return OldGFENV(...)
-    end))
-
     local OldSFENV
     OldSFENV = hookfunction(setfenv, newcclosure(function(...)
         Spoofpcalls()
         if pcall(OldSFENV, ...) then
             local f, e = ...
-            if RequestFunctions.find(f) then
+            if table.find(RequestFunctions, f) then
                 return
             end
         end
@@ -1073,7 +1063,7 @@ if Settings.RemoveSecurity then
     local NewMT = {
         __index = function(self, index)
             if index == 'getconstants' then
-                local oldgcs = rawget(OldDebug.getconstants)
+                local oldgcs = rawget(OldDebug, 'getconstants')
                 return function(...)
                     local f = select(1, ...)
                     if type(f) == 'function' then
@@ -1125,7 +1115,10 @@ local BlockedUrls = Settings.BlockUrls and
                         {"discord.com/api/webhooks/", "webhook", "websec", "000webhost", "freehosting", "repl",
                          "ident.me", "ipify.org", "dyndns.org", "checkip.amazonaws.com", "httpbin.org/ip",
                          "ifconfig.io", "ipaddress.sh", "myip.com", "ligma.wtf", "library.veryverybored"} or {} -- list of blocked urls i copied from another http spy :troll:
-local BlockedInfo = Settings.BlockPrivateInfo and {game:GetService("Players").LocalPlayer.Name, game.PlaceId, game.GameId, game:GetService("RbxAnalyticsService"):GetClientId(), game:HttpGet('https://api.ipify.org')} or {}
+local BlockedInfo = Settings.BlockPrivateInfo and
+                        {game:GetService("Players").LocalPlayer.Name, game.PlaceId, game.GameId,
+                         game:GetService("RbxAnalyticsService"):GetClientId(), game:HttpGet('https://api.ipify.org')} or
+                        {}
 
 local function CheckArgs(...)
     local Serialized = Serialize(...)
@@ -1146,7 +1139,7 @@ local function CheckArgs(...)
     return Blocked
 end
 
-local HookReq = newcclosure(function(OldFunction, ...)
+local HookReq = function(OldFunction, ...)
     local Args = {...}
     local TResult = OldFunction(...)
     local DecodedSuccess, Decoded = pcall(function()
@@ -1158,7 +1151,7 @@ local HookReq = newcclosure(function(OldFunction, ...)
     end
 
     local Sent = Serialize(Args[1], 'local Sent = ') ..
-                     "\nSent = (syn and syn.request or http and http.request or http_request or request)(Sent)\nSent = game:GetService('HttpService'):JSONDecode(Sent.Body)" -- quickly make the exact request, good for recreating backends 
+                     "\nSent = (syn and syn.request or http and http.request or http_request or request)(Sent)\nSent = game:GetService('HttpService'):JSONDecode(Sent.Body)" -- quickly make the exact request, good for recreating backends
     local Result = Serialize(((Decoded ~= "" and Decoded ~= nil) and Decoded or TResult), 'local Received = ')
     local Blocked = CheckArgs(Args)
 
@@ -1169,7 +1162,7 @@ local HookReq = newcclosure(function(OldFunction, ...)
     end
 
     return TResult
-end)
+end
 
 if Settings.UseHookfunction then
     for i, v in pairs(RequestFunctions) do
