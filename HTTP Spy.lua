@@ -1263,6 +1263,14 @@ print([[
    Made by: noxu
 
    URLs: https://luapro.xyz / https://discord.gg/VrbNGY4cZD
+-- Update Log --
+    v1.1:
+        + Added more hooking against functions used for detections
+        + Added randomness to encryption, and global names / values
+        + Anti sandboxing
+        + Anti constants searching
+
+        + Removed getfenv hooking (useless and broke scripts)
 ]])
 
 _G[GlobalString] = true
